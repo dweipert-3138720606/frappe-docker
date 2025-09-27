@@ -1,0 +1,90 @@
+x-build: &build
+  context: "docker/erpnext"
+  args:
+    DB_HOST: "db"
+    DB_PORT: "3306"
+    REDIS_CACHE: "redis://redis-cache:6379"
+    REDIS_QUEUE: "redis://redis-queue:6379"
+    SOCKETIO_PORT: "9000"
+
+services:
+  frontend:
+    image: nginx:alpine
+    environment:
+      - "HOST_BACKEND=backend:8000"
+      - "HOST_SOCKETIO=websocket:9000"
+      - "FRAPPE_SITE_NAME_HEADER=$$host"
+      - "UPSTREAM_REAL_IP_ADDRESS=127.0.0.1"
+      - "UPSTREAM_REAL_IP_HEADER=X-Forwarded-For"
+      - "UPSTREAM_REAL_IP_RECURSIVE=off"
+    volumes:
+      - "/etc/localtime:/etc/localtime"
+      - "./docker/erpnext/nginx/templates:/etc/nginx/templates"
+      - "frappe-bench:/home/frappe/frappe-bench"
+    depends_on:
+      - "backend"
+      - "websocket"
+    ports:
+      - "80:80"
+
+  backend:
+    build:
+      <<: *build
+    command: "bench start"
+    volumes:
+      - "/etc/localtime:/etc/localtime"
+      - "frappe-bench:/home/frappe/frappe-bench"
+      - "./apps/$APP_NAME:/home/frappe/frappe-bench/apps/$APP_NAME"
+    depends_on:
+      - "db"
+
+  db:
+    image: mariadb
+    environment:
+      - "MYSQL_ROOT_PASSWORD=admin"
+      - "MARIADB_ROOT_PASSWORD=admin"
+    volumes:
+      - "db:/var/lib/mysql"
+
+  queue-long:
+    build:
+      <<: *build
+    command: "bench worker --queue long,default,short"
+    volumes:
+      - "frappe-bench:/home/frappe/frappe-bench"
+    depends_on:
+      - "redis-queue"
+
+  queue-short:
+    build:
+      <<: *build
+    command: "bench worker --queue short,default"
+    volumes:
+      - "frappe-bench:/home/frappe/frappe-bench"
+    depends_on:
+      - "redis-queue"
+
+  redis-cache:
+    image: redis:alpine
+
+  redis-queue:
+    image: redis:alpine
+
+  scheduler:
+    build:
+      <<: *build
+    command: "bench schedule"
+
+  websocket:
+    build:
+      <<: *build
+    command: "node /home/frappe/frappe-bench/apps/frappe/socketio.js"
+    volumes:
+      - "frappe-bench:/home/frappe/frappe-bench"
+    depends_on:
+      - "redis-cache"
+
+
+volumes:
+  frappe-bench:
+  db:
