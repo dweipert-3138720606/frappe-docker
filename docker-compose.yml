@@ -19,7 +19,7 @@ services:
       - "UPSTREAM_REAL_IP_RECURSIVE=off"
     volumes:
       - "/etc/localtime:/etc/localtime"
-      - "./docker/erpnext/nginx/templates:/etc/nginx/templates"
+      - "./docker/nginx/templates:/etc/nginx/templates"
       - "frappe-bench:/home/frappe/frappe-bench"
     depends_on:
       - "backend"
